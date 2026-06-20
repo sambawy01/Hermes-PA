@@ -28,10 +28,31 @@ if [ -n "${GITHUB_TOKEN:-}" ] && [ -n "${GITHUB_USER:-}" ]; then
     # being used for authentication").  Save the token, unset both vars,
     # authenticate, then leave them unset — Hermes scrubs them from
     # subprocesses anyway via _HERMES_PROVIDER_ENV_BLOCKLIST.
+    #
+    # CRITICAL: railway-init.sh runs as root, but the Hermes terminal tool
+    # runs as the "hermes" user (UID 10000, HOME=/opt/data).  gh stores
+    # credentials in ~/.config/gh/hosts.yml, so we must authenticate as
+    # the hermes user — otherwise gh creds land in /root/.config/gh/ and
+    # the hermes user can't see them.
     _gh_token="$GITHUB_TOKEN"
     unset GH_TOKEN GITHUB_TOKEN
-    printf '%s' "$_gh_token" | gh auth login --with-token >/dev/null 2>&1 && \
-      log "gh CLI authenticated" || log "gh CLI auth failed (non-fatal)"
+    mkdir -p "$HOME_DIR/.config/gh"
+    chown hermes:hermes "$HOME_DIR/.config/gh"
+    if command -v s6-setuidgid >/dev/null 2>&1; then
+      printf '%s' "$_gh_token" | s6-setuidgid hermes gh auth login --with-token >/dev/null 2>&1 && \
+        log "gh CLI authenticated (as hermes)" || log "gh CLI auth failed (non-fatal)"
+    else
+      # Fallback: authenticate as root, then copy hosts.yml to hermes home
+      printf '%s' "$_gh_token" | gh auth login --with-token >/dev/null 2>&1
+      if [ -f /root/.config/gh/hosts.yml ]; then
+        cp /root/.config/gh/hosts.yml "$HOME_DIR/.config/gh/hosts.yml"
+        chown hermes:hermes "$HOME_DIR/.config/gh/hosts.yml"
+        chmod 600 "$HOME_DIR/.config/gh/hosts.yml"
+        log "gh CLI authenticated (copied to hermes home)"
+      else
+        log "gh CLI auth failed (non-fatal)"
+      fi
+    fi
   fi
 fi
 
