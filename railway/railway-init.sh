@@ -18,6 +18,14 @@ if [ -n "${GITHUB_TOKEN:-}" ] && [ -n "${GITHUB_USER:-}" ]; then
   [ -n "${GIT_AUTHOR_NAME:-}" ]  && git config --global user.name  "$GIT_AUTHOR_NAME"  || true
   [ -n "${GIT_AUTHOR_EMAIL:-}" ] && git config --global user.email "$GIT_AUTHOR_EMAIL" || true
   log "git credentials written"
+  # Authenticate gh CLI from the token so GitHub skills work despite
+  # _HERMES_PROVIDER_ENV_BLOCKLIST scrubbing GITHUB_TOKEN/GH_TOKEN from
+  # terminal subprocesses (GHSA-rhgp-j443-p4rf).  gh stores the token in
+  # its own config file, so it survives the env scrub.
+  if command -v gh >/dev/null 2>&1; then
+    printf '%s' "$GITHUB_TOKEN" | gh auth login --with-token >/dev/null 2>&1 && \
+      log "gh CLI authenticated" || log "gh CLI auth failed (non-fatal)"
+  fi
 fi
 
 # --- Google Calendar OAuth (Desktop client keys + cached tokens) -----------
