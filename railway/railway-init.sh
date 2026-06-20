@@ -23,7 +23,14 @@ if [ -n "${GITHUB_TOKEN:-}" ] && [ -n "${GITHUB_USER:-}" ]; then
   # terminal subprocesses (GHSA-rhgp-j443-p4rf).  gh stores the token in
   # its own config file, so it survives the env scrub.
   if command -v gh >/dev/null 2>&1; then
-    printf '%s' "$GITHUB_TOKEN" | gh auth login --with-token >/dev/null 2>&1 && \
+    # gh refuses to store credentials when GH_TOKEN/GITHUB_TOKEN are set in
+    # the environment ("The value of the GH_TOKEN environment variable is
+    # being used for authentication").  Save the token, unset both vars,
+    # authenticate, then leave them unset — Hermes scrubs them from
+    # subprocesses anyway via _HERMES_PROVIDER_ENV_BLOCKLIST.
+    _gh_token="$GITHUB_TOKEN"
+    unset GH_TOKEN GITHUB_TOKEN
+    printf '%s' "$_gh_token" | gh auth login --with-token >/dev/null 2>&1 && \
       log "gh CLI authenticated" || log "gh CLI auth failed (non-fatal)"
   fi
 fi
