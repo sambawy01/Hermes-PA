@@ -74,8 +74,11 @@ terminal:
   timeout: 180
   # GITHUB_TOKEN / GH_TOKEN removed from env_passthrough — they are on the
   # _HERMES_PROVIDER_ENV_BLOCKLIST (GHSA-rhgp-j443-p4rf) and always get
-  # scrubbed.  gh CLI is authenticated at boot via railway-init.sh instead.
-  home_mode: auto
+  # gh CLI is authenticated at boot via railway-init.sh instead.
+  # home_mode: real — keep HOME=/opt/data for subprocesses so gh CLI finds
+  # /opt/data/.config/gh/hosts.yml. In "auto" mode (default), containers get
+  # HOME={HERMES_HOME}/home which breaks gh credential discovery.
+  home_mode: real
   shell_init_files: []
   auto_source_bashrc: true
   docker_image: nikolaik/python-nodejs:python3.11-nodejs20
