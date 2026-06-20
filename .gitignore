@@ -1,0 +1,23 @@
+# Secrets — NEVER commit
+.env
+.env.*
+!.env.example
+*.key
+*.keys.json
+**/gcp-oauth.keys.json
+**/tokens.json
+.git-credentials
+auth.json
+secrets/
+
+# State / runtime
+state.db*
+sessions/
+logs/
+cache/
+*.log
+
+# Python / build junk
+__pycache__/
+*.pyc
+.DS_Store
