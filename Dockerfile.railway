@@ -1,0 +1,130 @@
+# ──────────────────────────────────────────────────────────────────────────
+# Hermes-PA Dockerfile for Railway
+# ──────────────────────────────────────────────────────────────────────────
+# Self-contained: clones Hermes Agent source from GitHub, overlays custom
+# configs from this repo, and builds. No need for the full Hermes source
+# tree on your local machine — just `railway up` from this repo.
+#
+# Pin a specific Hermes version by changing HERMES_REF to a commit SHA,
+# branch, or tag.
+# ──────────────────────────────────────────────────────────────────────────
+
+ARG HERMES_REF=main
+
+# ── Stage 1: Prepare source tree (clone Hermes + overlay custom configs) ───
+FROM alpine/git:latest AS source
+ARG HERMES_REF
+RUN git clone --depth 1 --branch "${HERMES_REF}" \
+        https://github.com/NousResearch/hermes-agent.git /hermes
+
+# Overlay custom configs from this repo onto the cloned source
+COPY railway/railway-state/ /hermes/docker/railway-state/
+COPY railway/railway-init.sh /hermes/railway-init.sh
+
+# ── Stage 2: Build (reproduces upstream Dockerfile.railway) ────────────────
+# The upstream Dockerfile.railway can't be used directly because Railway
+# expects the Dockerfile in the repo root, not inside a cloned subdirectory.
+# Instead, we copy the prepared source tree and reproduce the build steps.
+# The upstream Dockerfile is ~370 lines and changes occasionally; to stay
+# in sync, pin HERMES_REF to a specific commit and update when needed.
+
+FROM ghcr.io/astral-sh/uv:0.11.6-python3.13-trixie@sha256:b3c543b6c4f23a5f2df22866bd7857e5d304b67a564f4feab6ac22044dde719b AS uv_source
+FROM node:22-bookworm-slim@sha256:7af03b14a13c8cdd38e45058fd957bf00a72bbe17feac43b1c15a689c029c732 AS node_source
+FROM debian:13.4
+
+ARG TARGETARCH
+ARG S6_OVERLAY_VERSION=3.2.1.0
+ARG GH_VERSION=2.95.0
+
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/hermes/.playwright
+
+# System deps
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    ca-certificates curl iputils-ping python3 python-is-python3 ripgrep ffmpeg \
+    gcc g++ make cmake python3-dev python3-venv libffi-dev libolm-dev procps \
+    git openssh-client docker-cli xz-utils && \
+    rm -rf /var/lib/apt/lists/*
+
+# s6-overlay
+RUN set -eu; \
+    case "${TARGETARCH:-amd64}" in \
+        amd64)  arch="x86_64"  ;; \
+        arm64)  arch="aarch64" ;; \
+        *)      echo "Unsupported arch: ${TARGETARCH}"; exit 1 ;; \
+    esac; \
+    curl -fsSL "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz" -o /tmp/s6-noarch.tar.xz && \
+    curl -fsSL "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-${arch}.tar.xz" -o /tmp/s6-arch.tar.xz && \
+    curl -fsSL "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-symlinks-noarch.tar.xz" -o /tmp/s6-symlinks.tar.xz && \
+    tar -C / -Jxf /tmp/s6-noarch.tar.xz && \
+    tar -C / -Jxf /tmp/s6-arch.tar.xz && \
+    tar -C / -Jxf /tmp/s6-symlinks.tar.xz && \
+    rm -f /tmp/s6-*.tar.xz
+
+# Python + Node tooling
+COPY --chmod=0755 --from=uv_source /usr/local/bin/uv /usr/local/bin/uvx /usr/local/bin/
+COPY --chmod=0755 --from=node_source /usr/local/bin/node /usr/local/bin/
+COPY --from=node_source /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
+COPY --from=node_source /usr/local/lib/node_modules/corepack /usr/local/lib/node_modules/corepack
+RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm && \
+    ln -s /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
+
+# Copy prepared Hermes source (cloned + overlaid in Stage 1)
+COPY --from=source /hermes/ /opt/hermes/
+WORKDIR /opt/hermes
+
+# Python deps
+RUN uv venv /opt/hermes/.venv --python 3.13 && \
+    uv pip install --no-cache-dir -e "." && \
+    uv pip install --no-cache-dir fastembed
+
+# Web + TUI build
+RUN cd web && npm install && npm run build && \
+    cd ../ui-tui && npm install && npm run build
+
+# GitHub CLI
+RUN set -eu; \
+    arch="${TARGETARCH:-amd64}"; \
+    curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${arch}.tar.gz" -o /tmp/gh.tgz; \
+    tar -C /tmp -xzf /tmp/gh.tgz; \
+    install -m 0755 "/tmp/gh_${GH_VERSION}_linux_${arch}/bin/gh" /usr/local/bin/gh; \
+    rm -rf /tmp/gh.tgz "/tmp/gh_${GH_VERSION}_linux_${arch}"; \
+    gh --version
+
+# Permissions: make /opt/hermes immutable
+RUN mkdir -p /opt/hermes/bin && \
+    cp /opt/hermes/docker/hermes-exec-shim.sh /opt/hermes/bin/hermes && \
+    chmod 0755 /opt/hermes/bin/hermes && \
+    printf 'docker\n' > /opt/hermes/.install_method && \
+    chown -R root:root /opt/hermes && \
+    chmod -R a+rX /opt/hermes && \
+    chmod -R a-w /opt/hermes
+
+# s6-overlay service wiring
+COPY --from=source /hermes/docker/s6-rc.d/ /etc/s6-overlay/s6-rc.d/
+RUN mkdir -p /etc/cont-init.d && \
+    printf '#!/command/with-contenv sh\nexec /opt/hermes/docker/stage2-hook.sh\n' \
+        > /etc/cont-init.d/01-hermes-setup && \
+    chmod +x /etc/cont-init.d/01-hermes-setup
+COPY --from=source /hermes/docker/cont-init.d/015-supervise-perms /etc/cont-init.d/015-supervise-perms
+COPY --from=source /hermes/docker/cont-init.d/02-reconcile-profiles /etc/cont-init.d/02-reconcile-profiles
+
+# Runtime env
+ENV HERMES_WEB_DIST=/opt/hermes/hermes_cli/web_dist
+ENV HERMES_TUI_DIR=/opt/hermes/ui-tui
+ENV HERMES_HOME=/opt/data
+ENV HERMES_WRITE_SAFE_ROOT=/opt/data
+ENV HERMES_DISABLE_LAZY_INSTALLS=1
+ENV PATH="/opt/hermes/bin:/opt/hermes/.venv/bin:/opt/data/.local/bin:${PATH}"
+
+RUN mkdir -p /opt/data
+
+# Railway: seed user state + boot init
+COPY --from=source --chown=hermes:hermes /hermes/docker/railway-state/ /opt/data/
+COPY --from=source --chmod=0755 /hermes/railway-init.sh /opt/hermes/railway-init.sh
+RUN printf '#!/command/with-contenv sh\nexec /opt/hermes/railway-init.sh\n' > /etc/cont-init.d/03-railway-init && chmod +x /etc/cont-init.d/03-railway-init
+
+ENTRYPOINT [ "/init", "/opt/hermes/docker/main-wrapper.sh" ]
+CMD [ "gateway", "run" ]
