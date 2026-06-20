@@ -26,6 +26,7 @@ railway variables --service "$SERVICE" \
   --set "TELEGRAM_BOT_TOKEN=$(val TELEGRAM_BOT_TOKEN)" \
   --set "TELEGRAM_ALLOWED_USERS=$(val TELEGRAM_ALLOWED_USERS)" \
   --set "GITHUB_TOKEN=$(val GITHUB_TOKEN)" \
+  --set "GH_TOKEN=$(val GH_TOKEN)" \
   --set "GITHUB_USER=$(val GITHUB_USER)" \
   --set "GIT_AUTHOR_NAME=$(val GIT_AUTHOR_NAME)" \
   --set "GIT_AUTHOR_EMAIL=$(val GIT_AUTHOR_EMAIL)" \

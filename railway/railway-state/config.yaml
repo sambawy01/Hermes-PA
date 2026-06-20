@@ -72,7 +72,9 @@ terminal:
   modal_mode: auto
   cwd: .
   timeout: 180
-  env_passthrough: []
+  env_passthrough:
+  - GITHUB_TOKEN
+  - GH_TOKEN
   home_mode: auto
   shell_init_files: []
   auto_source_bashrc: true
@@ -520,7 +522,7 @@ kanban:
   failure_limit: 2
   worker_log_rotate_bytes: 2097152
   worker_log_backup_count: 1
-  orchestrator_profile: ''
+  orchestrator_profile: default
   default_assignee: ''
   max_in_progress_per_profile: null
   auto_decompose: true
