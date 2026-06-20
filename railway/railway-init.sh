@@ -38,8 +38,10 @@ if [ -n "${GITHUB_TOKEN:-}" ] && [ -n "${GITHUB_USER:-}" ]; then
     unset GH_TOKEN GITHUB_TOKEN
     mkdir -p "$HOME_DIR/.config/gh"
     chown hermes:hermes "$HOME_DIR/.config/gh"
+    # s6-setuidgid drops to the hermes user but doesn't set HOME,
+    # so we export it explicitly. gh stores creds in $HOME/.config/gh/.
     if command -v s6-setuidgid >/dev/null 2>&1; then
-      printf '%s' "$_gh_token" | s6-setuidgid hermes gh auth login --with-token >/dev/null 2>&1 && \
+      printf '%s' "$_gh_token" | env HOME="$HOME_DIR" s6-setuidgid hermes gh auth login --with-token >/dev/null 2>&1 && \
         log "gh CLI authenticated (as hermes)" || log "gh CLI auth failed (non-fatal)"
     else
       # Fallback: authenticate as root, then copy hosts.yml to hermes home
