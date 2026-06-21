@@ -32,9 +32,7 @@ Telegram / CLI
 | `skills/` | custom skills: fnb-expert, demand-forecasting, entrepreneur-frameworks |
 | `scripts/supabase_migration.sql` | one-time Supabase schema (tables, pgvector, search fns) |
 | `scripts/railway-push.sh` | set Railway vars + deploy |
-| `railway/Dockerfile.railway` | Railway image (VOLUME stripped, gateway run, fastembed + gh) |
 | `railway/railway-init.sh` | boot-time materialisation of git/Google creds from env |
-| `railway/railway-state/` | baked seed copied into the image (no secrets) |
 
 ## Setup (summary)
 

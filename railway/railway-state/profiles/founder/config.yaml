@@ -1,5 +1,0 @@
-# Founder profile — inherits from default (concierge) config, overrides only what differs.
-agent:
-  reasoning_effort: high
-terminal:
-  timeout: 180

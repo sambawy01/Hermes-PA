@@ -1,5 +1,0 @@
-# F&B profile — inherits from default (concierge) config, overrides only what differs.
-agent:
-  reasoning_effort: medium
-terminal:
-  timeout: 180
