@@ -5,7 +5,7 @@ model:
 providers: {}
 fallback_providers:
 - provider: ollama-cloud
-  model: qwen3.6:35b
+  model: glm-5.1
   base_url: https://ollama.com/v1
 credential_pool_strategies: {}
 toolsets:
