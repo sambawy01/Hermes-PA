@@ -4,9 +4,9 @@ model:
   base_url: https://ollama.com/v1
 providers: {}
 fallback_providers:
-- provider: openrouter
-  model: anthropic/claude-sonnet-4
-  api_key_env: OPENROUTER_API_KEY
+- provider: ollama-cloud
+  model: qwen3.6:35b
+  base_url: https://ollama.com/v1
 credential_pool_strategies: {}
 toolsets:
 - hermes-cli

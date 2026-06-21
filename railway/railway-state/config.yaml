@@ -4,9 +4,9 @@ model:
   base_url: https://ollama.com/v1
 providers: {}
 fallback_providers:
-- provider: openrouter
-  model: anthropic/claude-sonnet-4
-  api_key_env: OPENROUTER_API_KEY
+- provider: ollama-cloud
+  model: qwen3.6:35b
+  base_url: https://ollama.com/v1
 credential_pool_strategies: {}
 toolsets:
 - hermes-cli
@@ -78,10 +78,7 @@ terminal:
   # GITHUB_TOKEN / GH_TOKEN removed from env_passthrough — they are on the
   # _HERMES_PROVIDER_ENV_BLOCKLIST (GHSA-rhgp-j443-p4rf) and always get
   # scrubbed.  gh CLI is authenticated at boot via railway-init.sh instead.
-  # home_mode: real — keep HOME=/opt/data for subprocesses so gh CLI finds
-  # /opt/data/.config/gh/hosts.yml. In "auto" mode (default), containers get
-  # HOME={HERMES_HOME}/home which breaks gh credential discovery.
-  home_mode: real
+  home_mode: auto
   shell_init_files: []
   auto_source_bashrc: true
   docker_image: nikolaik/python-nodejs:python3.11-nodejs20
