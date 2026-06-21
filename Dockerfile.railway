@@ -78,10 +78,16 @@ RUN useradd -u 10000 -m -d /opt/data hermes
 COPY --from=source /hermes/ /opt/hermes/
 WORKDIR /opt/hermes
 
-# Python deps
+# Python deps — install with extras so messaging adapters (Telegram, Discord,
+# Slack, Matrix) are available without lazy installs (disabled at runtime).
+# Mirrors upstream Dockerfile.railway: --extra all --extra messaging plus
+# provider packages that can't lazy-install in immutable containers.
 RUN uv venv /opt/hermes/.venv --python 3.13 && \
-    uv pip install --no-cache-dir -e "." && \
-    uv pip install --no-cache-dir fastembed
+    uv sync --frozen --no-install-project \
+        --extra all --extra messaging --extra anthropic \
+        --extra bedrock --extra azure-identity --extra hindsight --extra matrix && \
+    uv pip install --no-cache-dir --no-deps -e "." && \
+    uv pip install --no-cache-dir fastembed ddgs aiohttp
 
 # Web + TUI build
 RUN cd web && npm install && npm run build && \
@@ -111,8 +117,8 @@ RUN mkdir -p /etc/cont-init.d && \
     printf '#!/command/with-contenv sh\nexec /opt/hermes/docker/stage2-hook.sh\n' \
         > /etc/cont-init.d/01-hermes-setup && \
     chmod +x /etc/cont-init.d/01-hermes-setup
-COPY --from=source /hermes/docker/cont-init.d/015-supervise-perms /etc/cont-init.d/015-supervise-perms
-COPY --from=source /hermes/docker/cont-init.d/02-reconcile-profiles /etc/cont-init.d/02-reconcile-profiles
+COPY --from=source --chmod=0755 /hermes/docker/cont-init.d/015-supervise-perms /etc/cont-init.d/015-supervise-perms
+COPY --from=source --chmod=0755 /hermes/docker/cont-init.d/02-reconcile-profiles /etc/cont-init.d/02-reconcile-profiles
 
 # Runtime env
 ENV HERMES_WEB_DIST=/opt/hermes/hermes_cli/web_dist
