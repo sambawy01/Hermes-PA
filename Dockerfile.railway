@@ -34,6 +34,9 @@ COPY SOUL.md /hermes/docker/railway-state/SOUL.md
 COPY profiles/ /hermes/docker/railway-state/profiles/
 COPY skills/ /hermes/docker/railway-state/skills/
 COPY plugins/ /hermes/docker/railway-state/plugins/
+COPY scripts/heartbeat.py /hermes/docker/railway-state/scripts/heartbeat.py
+COPY scripts/error-monitor.py /hermes/docker/railway-state/scripts/error-monitor.py
+COPY scripts/setup-cron-jobs.py /hermes/docker/railway-state/scripts/setup-cron-jobs.py
 COPY railway/railway-init.sh /hermes/railway-init.sh
 # Apply Railway-specific config override: home_mode must be "real" so
 # subprocess HOME=/opt/data (gh CLI credential discovery works).

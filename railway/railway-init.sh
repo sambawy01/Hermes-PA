@@ -85,4 +85,19 @@ except Exception:
     pass
 PY
 
+# --- Ensure cron jobs exist (morning briefing + heartbeat) -----------------
+# Runs the setup script in the background after the gateway starts.
+# Idempotent — only creates jobs that don't already exist.
+if [ -f "/opt/hermes/scripts/setup-cron-jobs.py" ] || \
+   [ -f "$HOME_DIR/scripts/setup-cron-jobs.py" ]; then
+  SCRIPT_DIR=""
+  [ -f "/opt/hermes/scripts/setup-cron-jobs.py" ] && SCRIPT_DIR="/opt/hermes/scripts"
+  [ -f "$HOME_DIR/scripts/setup-cron-jobs.py" ] && SCRIPT_DIR="$HOME_DIR/scripts"
+  if [ -n "$SCRIPT_DIR" ]; then
+    ( sleep 30 && env HOME="$HOME_DIR" python3 "$SCRIPT_DIR/setup-cron-jobs.py" 2>&1 | \
+      while IFS= read -r line; do printf "[cron-setup] %s\n" "$line"; done ) &
+    log "cron job setup scheduled (30s delay)"
+  fi
+fi
+
 log "init complete"

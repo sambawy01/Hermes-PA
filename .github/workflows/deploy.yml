@@ -1,0 +1,90 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        default: "staging"
+        type: choice
+        options:
+          - staging
+          - production
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event_name == 'push' && 'production' || github.event_name == 'pull_request' && 'staging' || inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: |
+          curl -fsSL https://railway.com/install.sh | sh
+          echo "$HOME/.railway/bin" >> $GITHUB_PATH
+
+      - name: Deploy to Railway
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          # Determine target environment
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            ENV="staging"
+            echo "Deploying PR #${{ github.event.number }} to staging..."
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            ENV="production"
+            echo "Deploying push to main → production..."
+          else
+            ENV="${{ inputs.environment }}"
+            echo "Manual deploy to $ENV..."
+          fi
+
+          # Link to the project and environment
+          railway link --project mellow-fulfillment --environment "$ENV" --service Hermes-Gateway --yes 2>/dev/null || \
+            railway link --project mellow-fulfillment --environment "$ENV" --service Hermes-Gateway 2>/dev/null || true
+
+          # Deploy
+          railway up --detach --service Hermes-Gateway 2>&1 || {
+            echo "Deploy failed"
+            exit 1
+          }
+
+          echo "Deploy triggered to $ENV"
+
+      - name: Notify on PR deploy
+        if: github.event_name == 'pull_request'
+        env:
+          BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.TELEGRAM_ALLOWED_USERS }}
+        run: |
+          curl -sf "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+            -d "chat_id=${CHAT_ID}" \
+            -d "text=🚀 Hermes-PA PR #${{ github.event.number }} deployed to staging. Test before merging." \
+            -d "parse_mode=Markdown" > /dev/null 2>&1 || true
+
+      - name: Notify on production deploy
+        if: github.event_name == 'push' && success()
+        env:
+          BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.TELEGRAM_ALLOWED_USERS }}
+        run: |
+          curl -sf "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+            -d "chat_id=${CHAT_ID}" \
+            -d "text=✅ Hermes-PA deployed to production: ${{ github.event.head_commit.message }}" \
+            -d "parse_mode=Markdown" > /dev/null 2>&1 || true
+
+      - name: Alert on deploy failure
+        if: failure()
+        env:
+          BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.TELEGRAM_ALLOWED_USERS }}
+        run: |
+          curl -sf "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+            -d "chat_id=${CHAT_ID}" \
+            -d "text=⚠️ Hermes-PA deploy FAILED (${{ github.event_name }}). Check GitHub Actions." \
+            -d "parse_mode=Markdown" > /dev/null 2>&1 || true
