@@ -33,7 +33,9 @@ COPY config.yaml /hermes/docker/railway-state/config.yaml
 COPY SOUL.md /hermes/docker/railway-state/SOUL.md
 COPY profiles/ /hermes/docker/railway-state/profiles/
 COPY skills/ /hermes/docker/railway-state/skills/
-COPY plugins/ /hermes/docker/railway-state/plugins/
+# Plugin must be at plugins/supabase/ (not plugins/memory/supabase/) because
+# Hermes scans $HERMES_HOME/plugins/<name>/ for user-installed memory providers.
+COPY plugins/memory/supabase/__init__.py /hermes/docker/railway-state/plugins/supabase/__init__.py
 COPY scripts/heartbeat.py /hermes/docker/railway-state/scripts/heartbeat.py
 COPY scripts/error-monitor.py /hermes/docker/railway-state/scripts/error-monitor.py
 COPY scripts/setup-cron-jobs.py /hermes/docker/railway-state/scripts/setup-cron-jobs.py
