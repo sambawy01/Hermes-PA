@@ -9,7 +9,7 @@
 # branch, or tag.
 # ──────────────────────────────────────────────────────────────────────────
 
-ARG HERMES_REF=main
+ARG HERMES_REF=b5b8a4cd56cb75a563d8b40d998676b695748e64
 
 # ── Stage 1: Prepare source tree (clone Hermes + overlay custom configs) ───
 FROM alpine/git:latest AS source
@@ -87,7 +87,7 @@ RUN uv venv /opt/hermes/.venv --python 3.13 && \
         --extra all --extra messaging --extra anthropic \
         --extra bedrock --extra azure-identity --extra hindsight --extra matrix && \
     uv pip install --no-cache-dir --no-deps -e "." && \
-    uv pip install --no-cache-dir fastembed ddgs aiohttp
+    uv pip install --no-cache-dir fastembed faster-whisper ddgs aiohttp
 
 # Web + TUI build
 RUN cd web && npm install && npm run build && \
@@ -126,9 +126,15 @@ ENV HERMES_TUI_DIR=/opt/hermes/ui-tui
 ENV HERMES_HOME=/opt/data
 ENV HERMES_WRITE_SAFE_ROOT=/opt/data
 ENV HERMES_DISABLE_LAZY_INSTALLS=1
+ENV FASTEMBED_CACHE_PATH=/opt/data/.cache/fastembed
 ENV PATH="/opt/hermes/bin:/opt/hermes/.venv/bin:/opt/data/.local/bin:${PATH}"
 
 RUN mkdir -p /opt/data
+
+# Health check — verify the gateway process is responsive
+HEALTHCHECK --interval=60s --timeout=10s --retries=3 --start-period=30s \
+  CMD curl -sf http://localhost:${HERMES_DASHBOARD_PORT:-8000}/health >/dev/null 2>&1 || \
+      pgrep -f "gateway.*run" >/dev/null 2>&1 || exit 1
 
 # Railway: seed user state + boot init
 COPY --from=source --chown=hermes:hermes /hermes/docker/railway-state/ /opt/data/

@@ -12,12 +12,9 @@ log() { printf '[railway-init] %s\n' "$1"; }
 
 # --- Git credentials (GitHub PAT) -----------------------------------------
 if [ -n "${GITHUB_TOKEN:-}" ] && [ -n "${GITHUB_USER:-}" ]; then
-  git config --global credential.helper store || true
-  printf 'https://%s:%s@github.com\n' "$GITHUB_USER" "$GITHUB_TOKEN" > "$HOME_DIR/.git-credentials"
-  chmod 600 "$HOME_DIR/.git-credentials"
   [ -n "${GIT_AUTHOR_NAME:-}" ]  && git config --global user.name  "$GIT_AUTHOR_NAME"  || true
   [ -n "${GIT_AUTHOR_EMAIL:-}" ] && git config --global user.email "$GIT_AUTHOR_EMAIL" || true
-  log "git credentials written"
+  log "git identity configured"
   # Authenticate gh CLI from the token so GitHub skills work despite
   # _HERMES_PROVIDER_ENV_BLOCKLIST scrubbing GITHUB_TOKEN/GH_TOKEN from
   # terminal subprocesses (GHSA-rhgp-j443-p4rf).  gh stores the token in
@@ -55,6 +52,10 @@ if [ -n "${GITHUB_TOKEN:-}" ] && [ -n "${GITHUB_USER:-}" ]; then
         log "gh CLI auth failed (non-fatal)"
       fi
     fi
+    # Use gh CLI as the git credential helper — more robust than the
+    # .git-credentials file approach. gh handles auth transparently.
+    git config --global credential.helper '!gh auth git-credential'
+    log "git credential helper set to gh CLI"
   fi
 fi
 
