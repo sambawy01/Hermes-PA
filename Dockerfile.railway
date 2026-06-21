@@ -71,6 +71,9 @@ COPY --from=node_source /usr/local/lib/node_modules/corepack /usr/local/lib/node
 RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm && \
     ln -s /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
 
+# Non-root user for runtime; s6-overlay init scripts + s6-setuidgid expect it.
+RUN useradd -u 10000 -m -d /opt/data hermes
+
 # Copy prepared Hermes source (cloned + overlaid in Stage 1)
 COPY --from=source /hermes/ /opt/hermes/
 WORKDIR /opt/hermes
