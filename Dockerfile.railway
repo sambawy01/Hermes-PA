@@ -10,6 +10,7 @@
 # ──────────────────────────────────────────────────────────────────────────
 
 ARG HERMES_REF=b5b8a4cd56cb75a563d8b40d998676b695748e64
+ARG CACHE_BUSTER=1
 
 # ── Stage 1: Prepare source tree (clone Hermes + overlay custom configs) ───
 FROM alpine/git:latest AS source
