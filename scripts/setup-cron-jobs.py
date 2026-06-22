@@ -73,7 +73,7 @@ def create_cron_job(job):
         cmd.extend(["--script", job["script"]])
 
     if job.get("prompt"):
-        cmd.extend(["--prompt", job["prompt"]])
+        cmd.append(job["prompt"])  # prompt is a positional arg, not --prompt
 
     cmd.extend(["--name", job["name"]])
 
