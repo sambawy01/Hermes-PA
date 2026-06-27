@@ -41,6 +41,12 @@ JOBS = [
         "script": "error-monitor.py",
         "no_agent": True,
     },
+    {
+        "name": "daily-backup",
+        "schedule": "0 3 * * *",  # 03:00 Africa/Cairo
+        "script": "backup.py",
+        "no_agent": True,
+    },
 ]
 
 def run_cron_list():
