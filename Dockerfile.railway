@@ -155,7 +155,20 @@ ENV PATH="/opt/hermes/bin:/opt/hermes/.venv/bin:/opt/data/.local/bin:${PATH}"
 RUN mkdir -p /opt/data
 
 # Railway: seed user state + boot init
+# Seed BOTH locations:
+#   /opt/data        — used when NO persistent volume is attached (ephemeral).
+#   /opt/railway-seed — immutable seed OUTSIDE the mount point. A persistent
+#                       volume mounted at /opt/data mounts EMPTY and shadows the
+#                       baked /opt/data content, so 00-railway-seed copies this
+#                       seed into the volume on first boot (and re-syncs
+#                       config-as-code on every boot). Without this, attaching a
+#                       volume hides config.yaml -> "model provider failure".
 COPY --from=source --chown=hermes:hermes /hermes/docker/railway-state/ /opt/data/
+COPY --from=source --chown=hermes:hermes /hermes/docker/railway-state/ /opt/railway-seed/
+COPY railway/seed-volume.sh /opt/hermes/seed-volume.sh
+RUN chmod 0755 /opt/hermes/seed-volume.sh && \
+    printf '#!/command/with-contenv sh\nexec /opt/hermes/seed-volume.sh\n' > /etc/cont-init.d/00-railway-seed && \
+    chmod +x /etc/cont-init.d/00-railway-seed
 COPY --from=source --chmod=0755 /hermes/railway-init.sh /opt/hermes/railway-init.sh
 RUN printf '#!/command/with-contenv sh\nexec /opt/hermes/railway-init.sh\n' > /etc/cont-init.d/03-railway-init && chmod +x /etc/cont-init.d/03-railway-init
 
