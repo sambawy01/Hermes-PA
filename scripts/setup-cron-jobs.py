@@ -93,23 +93,60 @@ def create_cron_job(job):
         print(f"  Error creating {job['name']}: {e}")
         return False
 
+def update_cron_job(job, existing_jobs):
+    """Update an existing cron job via hermes CLI."""
+    # Find the job ID by name
+    job_id = None
+    for j in existing_jobs:
+        if j.get("name") == job["name"]:
+            job_id = j.get("id") or j.get("job_id")
+            break
+    if not job_id:
+        print(f"  Cannot update {job['name']}: no job ID found")
+        return False
+
+    cmd = ["hermes", "cron", "update", job_id]
+    if job.get("deliver"):
+        cmd.extend(["--deliver", job["deliver"]])
+    if job.get("script"):
+        cmd.extend(["--script", job["script"]])
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+        if result.returncode == 0:
+            print(f"  Updated: {job['name']}")
+            return True
+        else:
+            print(f"  Failed to update {job['name']}: {result.stderr}")
+            return False
+    except Exception as e:
+        print(f"  Error updating {job['name']}: {e}")
+        return False
+
+
 def main():
     print("Checking existing cron jobs...")
     existing = run_cron_list()
-    existing_names = {j.get("name") for j in existing} if isinstance(existing, list) else set()
+    existing_by_name = {}
+    if isinstance(existing, list):
+        for j in existing:
+            existing_by_name[j.get("name", "")] = j
 
-    if existing:
-        print(f"  Found {len(existing)} existing jobs: {existing_names}")
+    if existing_by_name:
+        print(f"  Found {len(existing_by_name)} existing jobs: {set(existing_by_name.keys())}")
 
     created = 0
+    updated = 0
     for job in JOBS:
-        if job["name"] in existing_names:
-            print(f"  Skip (exists): {job['name']}")
+        if job["name"] in existing_by_name:
+            print(f"  Updating (exists): {job['name']}")
+            if update_cron_job(job, existing):
+                updated += 1
             continue
         if create_cron_job(job):
             created += 1
 
-    print(f"\nDone: {created} jobs created, {len(JOBS) - created} already existed")
+    print(f"\nDone: {created} jobs created, {updated} updated, {len(JOBS) - created - updated} skipped")
 
 if __name__ == "__main__":
     main()
