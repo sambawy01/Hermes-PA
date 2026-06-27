@@ -67,25 +67,33 @@ jobs:
       - name: Seed-volume smoke test (simulates a fresh empty Railway volume)
         run: |
           set -euo pipefail
-          rm -rf "$PWD/empty-data" && mkdir -p "$PWD/empty-data"
+          # Use a Docker named volume — same shape as a Railway volume, and it
+          # avoids host bind-mount permission clashes (the seed script chowns
+          # /opt/data to uid 10000). All file ops run inside containers as root.
+          docker volume rm hermesdata >/dev/null 2>&1 || true
+          docker volume create hermesdata >/dev/null
 
           echo "::group::first boot — empty /opt/data must be fully seeded"
-          docker run --rm -e HERMES_HOME=/opt/data \
-            -v "$PWD/empty-data:/opt/data" \
+          docker run --rm -e HERMES_HOME=/opt/data -v hermesdata:/opt/data \
             --entrypoint sh hermes-pa:ci /opt/hermes/seed-volume.sh
-          test -f "$PWD/empty-data/config.yaml"   || { echo "config.yaml NOT seeded"; exit 1; }
-          grep -q "ollama-cloud" "$PWD/empty-data/config.yaml" || { echo "model provider missing from seeded config"; exit 1; }
-          test -f "$PWD/empty-data/SOUL.md"       || { echo "SOUL.md NOT seeded"; exit 1; }
+          docker run --rm -v hermesdata:/opt/data --entrypoint sh hermes-pa:ci -c '
+            set -e
+            test -f /opt/data/config.yaml            || { echo "config.yaml NOT seeded"; exit 1; }
+            grep -q ollama-cloud /opt/data/config.yaml || { echo "model provider missing from seeded config"; exit 1; }
+            test -f /opt/data/SOUL.md                || { echo "SOUL.md NOT seeded"; exit 1; }
+            echo marker > /opt/data/runtime-state.txt
+          '
           echo "::endgroup::"
 
           echo "::group::second boot — existing runtime state must be preserved"
-          echo "marker" > "$PWD/empty-data/runtime-state.txt"
-          docker run --rm -e HERMES_HOME=/opt/data \
-            -v "$PWD/empty-data:/opt/data" \
+          docker run --rm -e HERMES_HOME=/opt/data -v hermesdata:/opt/data \
             --entrypoint sh hermes-pa:ci /opt/hermes/seed-volume.sh
-          test -f "$PWD/empty-data/runtime-state.txt" || { echo "runtime state was wiped on re-boot"; exit 1; }
+          docker run --rm -v hermesdata:/opt/data --entrypoint sh hermes-pa:ci -c '
+            test -f /opt/data/runtime-state.txt || { echo "runtime state was wiped on re-boot"; exit 1; }
+          '
           echo "::endgroup::"
 
+          docker volume rm hermesdata >/dev/null 2>&1 || true
           echo "seed-volume smoke test passed"
       - name: Config loads inside the image
         run: |
