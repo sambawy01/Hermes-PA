@@ -50,17 +50,22 @@ JOBS = [
 ]
 
 def run_cron_list():
-    """Get existing cron jobs as JSON."""
+    """Return existing cron jobs (list of {name, id, ...}).
+
+    Reads the authoritative store at $HERMES_HOME/cron/jobs.json. NOTE: there is
+    no 'hermes cron list --json' flag — relying on it silently returned [], so
+    every run recreated all jobs and duplicates piled up. Reading the file is
+    what actually makes this script idempotent.
+    """
+    home = os.environ.get("HERMES_HOME") or os.path.expanduser("~/.hermes")
+    path = os.path.join(home, "cron", "jobs.json")
     try:
-        result = subprocess.run(
-            ["hermes", "cron", "list", "--json"],
-            capture_output=True, text=True, timeout=10
-        )
-        if result.returncode == 0:
-            return json.loads(result.stdout)
+        with open(path) as fh:
+            data = json.load(fh)
+        jobs = data.get("jobs", []) if isinstance(data, dict) else data
+        return jobs if isinstance(jobs, list) else []
     except Exception:
-        pass
-    return []
+        return []
 
 def cron_job_exists(jobs, name):
     """Check if a job with the given name exists."""
@@ -99,60 +104,23 @@ def create_cron_job(job):
         print(f"  Error creating {job['name']}: {e}")
         return False
 
-def update_cron_job(job, existing_jobs):
-    """Update an existing cron job via hermes CLI."""
-    # Find the job ID by name
-    job_id = None
-    for j in existing_jobs:
-        if j.get("name") == job["name"]:
-            job_id = j.get("id") or j.get("job_id")
-            break
-    if not job_id:
-        print(f"  Cannot update {job['name']}: no job ID found")
-        return False
-
-    cmd = ["hermes", "cron", "update", job_id]
-    if job.get("deliver"):
-        cmd.extend(["--deliver", job["deliver"]])
-    if job.get("script"):
-        cmd.extend(["--script", job["script"]])
-
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
-        if result.returncode == 0:
-            print(f"  Updated: {job['name']}")
-            return True
-        else:
-            print(f"  Failed to update {job['name']}: {result.stderr}")
-            return False
-    except Exception as e:
-        print(f"  Error updating {job['name']}: {e}")
-        return False
-
-
 def main():
     print("Checking existing cron jobs...")
-    existing = run_cron_list()
-    existing_by_name = {}
-    if isinstance(existing, list):
-        for j in existing:
-            existing_by_name[j.get("name", "")] = j
-
-    if existing_by_name:
-        print(f"  Found {len(existing_by_name)} existing jobs: {set(existing_by_name.keys())}")
+    existing_names = {j.get("name", "") for j in run_cron_list()}
+    if existing_names:
+        print(f"  Found {len(existing_names)} existing jobs: {existing_names}")
 
     created = 0
-    updated = 0
+    skipped = 0
     for job in JOBS:
-        if job["name"] in existing_by_name:
-            print(f"  Updating (exists): {job['name']}")
-            if update_cron_job(job, existing):
-                updated += 1
+        if job["name"] in existing_names:
+            print(f"  Skipped (exists): {job['name']}")
+            skipped += 1
             continue
         if create_cron_job(job):
             created += 1
 
-    print(f"\nDone: {created} jobs created, {updated} updated, {len(JOBS) - created - updated} skipped")
+    print(f"\nDone: {created} created, {skipped} skipped")
 
 if __name__ == "__main__":
     main()
