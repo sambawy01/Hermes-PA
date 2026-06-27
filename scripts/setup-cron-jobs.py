@@ -27,17 +27,18 @@ JOBS = [
             "(4) One line on weather in Cairo. "
             "Keep it scannable — no filler. UK English."
         ),
+        "deliver": "origin",
     },
     {
         "name": "heartbeat",
         "schedule": "*/15 * * * *",
-        "script": "scripts/heartbeat.py",
+        "script": "heartbeat.py",
         "no_agent": True,
     },
     {
         "name": "error-monitor",
         "schedule": "*/30 * * * *",
-        "script": "scripts/error-monitor.py",
+        "script": "error-monitor.py",
         "no_agent": True,
     },
 ]
@@ -76,6 +77,9 @@ def create_cron_job(job):
         cmd.append(job["prompt"])  # prompt is a positional arg, not --prompt
 
     cmd.extend(["--name", job["name"]])
+
+    if job.get("deliver"):
+        cmd.extend(["--deliver", job["deliver"]])
 
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
