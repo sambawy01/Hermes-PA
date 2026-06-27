@@ -42,6 +42,25 @@ Telegram / CLI
 4. `pip install fastembed` into the Hermes venv (local embeddings).
 5. Local: `hermes` (concierge) or `hermes -p coder` etc. Cloud: deploy with `scripts/railway-push.sh` using `railway/Dockerfile.railway`.
 
+## CI/CD
+
+Pipeline (GitHub Actions, see `.github/workflows/`):
+
+- **`ci.yml`** runs on every PR and push to `main`:
+  - `config-lint` — `scripts/validate_config.py` fails if `config.yaml` has no usable `model.default` / `provider` / `base_url` (the bug class behind the 2026-06-27 "model provider failure").
+  - `unit-tests` — `pytest tests/` (repo structure + config validity).
+  - `secret-scan` — gitleaks over full history; blocks committed secrets.
+  - `docker-smoke` — builds `Dockerfile.railway` and runs `seed-volume.sh` against an **empty** `/opt/data` to prove a fresh Railway volume gets seeded (config restored) and that a second boot preserves runtime state.
+- **`upstream-bump.yml`** (weekly + manual) — opens a PR bumping `HERMES_REF` to the latest `NousResearch/hermes-agent` commit, so upstream upgrades are deliberate and CI-tested instead of surprise rebuilds.
+- **`uptime-monitor.yml`** — Telegram bot liveness check every 15 min.
+
+**Deploy flow (PR-based, gated):**
+1. Branch → PR → CI must pass.
+2. Merge to `main`. Railway's native GitHub integration auto-builds from the merged commit.
+3. Enable **branch protection** on `main` requiring the `config-lint`, `unit-tests`, `secret-scan`, `docker-smoke` checks (and "require a PR"), so nothing reaches `main`/Railway unvalidated. Optionally enable Railway's **"Wait for CI"** on the service for defense-in-depth.
+
+> `railway/Dockerfile.railway` seeds the persistent volume on first boot via `00-railway-seed` (`railway/seed-volume.sh`) and re-syncs `config.yaml`/`SOUL.md` from the image every boot — a Railway volume mounts empty and would otherwise shadow the baked config.
+
 ## Security
 
 - All credentials live in `.env` / the secrets vault — **never** in this repo.
