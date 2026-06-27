@@ -39,9 +39,14 @@ if [ ! -f "$DATA/config.yaml" ]; then
   exit 0
 fi
 
-# Subsequent boots: keep runtime state, but force config-as-code to match the
-# image. This is what prevents a stale/missing config from re-introducing the
-# "model provider failure" after future image rebuilds.
+# Subsequent boots: keep runtime state, but force ALL config-as-code to match
+# the image. Files AND directories — a volume can end up with config.yaml but
+# missing profiles/plugins/scripts (e.g. a volume attached before this script
+# existed, which then only got the two top-level files synced). Restoring the
+# directories every boot is what keeps the Supabase memory plugin, the
+# specialist profiles, and the cron-setup scripts present on the volume.
+
+# Single files: overwrite from image.
 for f in config.yaml SOUL.md; do
   if [ -f "$SEED/$f" ]; then
     cp -a "$SEED/$f" "$DATA/$f"
@@ -49,4 +54,26 @@ for f in config.yaml SOUL.md; do
     log "re-synced $f from image"
   fi
 done
+
+# Repo-managed directories: fully replace from image (declarative — any runtime
+# drift here is not meant to persist; real state lives in sessions/, cron/,
+# kanban.db, auth.json, state.db, memories/ which we never touch).
+for d in profiles plugins scripts; do
+  if [ -d "$SEED/$d" ]; then
+    rm -rf "$DATA/$d"
+    cp -a "$SEED/$d" "$DATA/$d"
+    chown -R hermes:hermes "$DATA/$d"
+    log "restored $d/ from image"
+  fi
+done
+
+# skills/: MERGE, not replace — the agent can create skills at runtime, so we
+# overlay the repo's skills without deleting volume-only ones.
+if [ -d "$SEED/skills" ]; then
+  mkdir -p "$DATA/skills"
+  cp -a "$SEED/skills/." "$DATA/skills/"
+  chown -R hermes:hermes "$DATA/skills"
+  log "merged skills/ from image"
+fi
+
 log "config-as-code sync complete"

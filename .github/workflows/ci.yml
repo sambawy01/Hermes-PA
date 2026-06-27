@@ -93,6 +93,23 @@ jobs:
           '
           echo "::endgroup::"
 
+          echo "::group::hybrid boot — config present but config-as-code dirs missing must be restored"
+          # Simulate a volume that has config.yaml + runtime state but lost
+          # profiles/plugins/scripts (the 2026-06-27 degraded-volume case).
+          docker run --rm -v hermesdata:/opt/data --entrypoint sh hermes-pa:ci -c '
+            rm -rf /opt/data/profiles /opt/data/plugins /opt/data/scripts
+          '
+          docker run --rm -e HERMES_HOME=/opt/data -v hermesdata:/opt/data \
+            --entrypoint sh hermes-pa:ci /opt/hermes/seed-volume.sh
+          docker run --rm -v hermesdata:/opt/data --entrypoint sh hermes-pa:ci -c '
+            set -e
+            test -d /opt/data/profiles                          || { echo "profiles/ NOT restored"; exit 1; }
+            test -f /opt/data/plugins/supabase/__init__.py      || { echo "supabase memory plugin NOT restored"; exit 1; }
+            test -f /opt/data/scripts/setup-cron-jobs.py        || { echo "cron setup script NOT restored"; exit 1; }
+            test -f /opt/data/runtime-state.txt                 || { echo "runtime state lost during restore"; exit 1; }
+          '
+          echo "::endgroup::"
+
           docker volume rm hermesdata >/dev/null 2>&1 || true
           echo "seed-volume smoke test passed"
       - name: Config loads inside the image
