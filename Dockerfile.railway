@@ -11,7 +11,7 @@
 # with only home_mode overridden for Railway (sed in Stage 1).
 # ──────────────────────────────────────────────────────────────────────────
 
-ARG HERMES_REF=b5b8a4cd56cb75a563d8b40d998676b695748e64
+ARG HERMES_REF=dc5ef20d89f0fc787a97ebd05bb8c41fbce10ab7
 ARG CACHE_BUSTER=1
 
 # ── Stage 1: Prepare source tree (clone Hermes + overlay custom configs) ───
