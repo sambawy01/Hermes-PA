@@ -175,7 +175,7 @@ bedrock:
 auxiliary:
   vision:
     provider: ollama-cloud
-    model: qwen3-vl:235b-instruct
+    model: kimi-k2.7
     base_url: https://ollama.com/v1
     api_key: ''
     timeout: 120
